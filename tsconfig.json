@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@allowance/envelope": ["./packages/envelope/src/index.ts"],
+      "@allowance/policy": ["./packages/policy/src/index.ts"],
+      "@allowance/receipts": ["./packages/receipts/src/index.ts"],
+      "@allowance/reputation": ["./packages/reputation/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src", "packages/*/test", "scripts", "*.config.ts"]
+}

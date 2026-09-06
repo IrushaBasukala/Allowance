@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Allowance — agent spending statement</title>
+    <style>
+      /* ------------------------------------------------------------------
+     A statement, not a dashboard.
+
+     The subject is a financial record, so it borrows that vernacular:
+     ruled rows, tabular figures, amounts right-aligned, chronological.
+     Cleared items are plain ink — real statements don't paint approvals
+     green, they just list them. Only exceptions get marked, which is why
+     a declined row carries a red rail like a stamped cheque. That is the
+     one place colour is spent, and it is the thing the product is about.
+     ------------------------------------------------------------------ */
+      :root {
+        --paper: #f4f3ee;
+        --sheet: #ffffff;
+        --ink: #191c22;
+        --ink-soft: #5c6273;
+        --ink-faint: #8f95a3;
+        --rule: #e2e0d7;
+        --rule-firm: #c9c6b9;
+        --decline: #a32b22;
+        --decline-bg: #fbf1ef;
+        --radius: 2px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        font-size: 15px;
+        line-height: 1.45;
+        /* Tabular figures throughout: this is a ledger, columns must align. */
+        font-variant-numeric: tabular-nums;
+      }
+
+      .sheet {
+        max-width: 940px;
+        margin: 0 auto;
+        min-height: 100vh;
+        background: var(--sheet);
+        border-left: 1px solid var(--rule);
+        border-right: 1px solid var(--rule);
+      }
+
+      /* ---- masthead ---------------------------------------------------- */
+      header {
+        padding: 34px 32px 22px;
+        border-bottom: 2px solid var(--ink);
+      }
+      .title {
+        font-size: 21px;
+        font-weight: 620;
+        letter-spacing: -0.015em;
+        margin: 0 0 2px;
+      }
+      .subtitle {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 14px;
+        max-width: 62ch;
+      }
+
+      .source {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .source label {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      input[type="text"] {
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+        padding: 7px 10px;
+        border: 1px solid var(--rule-firm);
+        border-radius: var(--radius);
+        background: var(--sheet);
+        color: var(--ink);
+        width: 15ch;
+      }
+      input[type="text"]:focus-visible,
+      button:focus-visible,
+      .row:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
+      button {
+        font: inherit;
+        padding: 7px 14px;
+        border: 1px solid var(--rule-firm);
+        border-radius: var(--radius);
+        background: var(--sheet);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--ink);
+      }
+
+      .origin {
+        margin-top: 10px;
+        font-size: 12.5px;
+        color: var(--ink-faint);
+        word-break: break-all;
+      }
+      .origin a {
+        color: var(--ink-soft);
+      }
+
+      /* ---- summary ----------------------------------------------------- */
+      .summary {
+        padding: 26px 32px 22px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .figure {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .figure .amount {
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .figure .of {
+        color: var(--ink-soft);
+        font-size: 15px;
+      }
+
+      .meter {
+        margin-top: 12px;
+        height: 6px;
+        background: var(--rule);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .meter span {
+        display: block;
+        height: 100%;
+        background: var(--ink);
+        width: 0;
+      }
+      .meter.full span {
+        background: var(--decline);
+      }
+
+      .counts {
+        margin-top: 16px;
+        display: flex;
+        gap: 34px;
+        flex-wrap: wrap;
+      }
+      .count b {
+        font-size: 19px;
+        font-weight: 600;
+        display: block;
+      }
+      .count span {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      .count.declined b {
+        color: var(--decline);
+      }
+
+      /* ---- ledger ------------------------------------------------------ */
+      .colhead,
+      .row {
+        display: grid;
+        grid-template-columns: 92px 1fr 118px 150px;
+        gap: 16px;
+        padding: 11px 32px 11px 28px;
+        border-left: 4px solid transparent;
+      }
+      .colhead {
+        font-size: 12.5px;
+        color: var(--ink-faint);
+        border-bottom: 1px solid var(--rule);
+        padding-top: 14px;
+        padding-bottom: 8px;
+      }
+      .row {
+        border-bottom: 1px solid var(--rule);
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+        background: none;
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+        color: inherit;
+        border-radius: 0;
+      }
+      .row:hover {
+        background: #fbfaf7;
+        border-color: transparent;
+      }
+
+      /* The signature element: a declined row is stamped. */
+      .row.declined {
+        border-left-color: var(--decline);
+        background: var(--decline-bg);
+      }
+      .row.declined:hover {
+        background: #f8e9e6;
+        border-left-color: var(--decline);
+      }
+      .row.declined .verdict,
+      .row.declined .reason {
+        color: var(--decline);
+      }
+
+      .time {
+        color: var(--ink-soft);
+        font-size: 13.5px;
+      }
+      .party {
+        overflow-wrap: anywhere;
+      }
+      .value {
+        text-align: right;
+        font-weight: 550;
+      }
+      .verdict {
+        font-weight: 600;
+      }
+      .reason {
+        font-size: 13.5px;
+        color: var(--ink-soft);
+      }
+
+      /* Each signed envelope is a separate authorisation with its own budget.
+     Without a divider, three runs read as one list and the declines look
+     arbitrary. With it, the pattern is plain: every envelope cleared three
+     payments and then stopped. */
+      .envelope {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 20px 32px 9px;
+        border-bottom: 1px solid var(--rule-firm);
+        background: var(--paper);
+      }
+      .envelope .who {
+        font-weight: 600;
+        font-size: 13.5px;
+      }
+      .envelope .what {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      .envelope.current .who::after {
+        content: "current";
+        margin-left: 8px;
+        font-weight: 500;
+        color: var(--ink-faint);
+      }
+
+      .scope {
+        font-size: 13px;
+        color: var(--ink-faint);
+        margin-top: 14px;
+      }
+
+      .detail {
+        padding: 4px 32px 18px 60px;
+        border-bottom: 1px solid var(--rule);
+        background: #fbfaf7;
+        font-size: 13.5px;
+      }
+      .detail.declined {
+        background: var(--decline-bg);
+      }
+      .detail dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 190px 1fr;
+        gap: 5px 18px;
+      }
+      .detail dt {
+        color: var(--ink-soft);
+      }
+      .detail dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      /* ---- states ------------------------------------------------------ */
+      .notice {
+        padding: 44px 32px;
+        color: var(--ink-soft);
+        max-width: 62ch;
+      }
+      .notice.bad {
+        color: var(--decline);
+      }
+      .notice h2 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--ink);
+        margin: 0 0 6px;
+      }
+
+      footer {
+        padding: 22px 32px 40px;
+        color: var(--ink-faint);
+        font-size: 12.5px;
+        border-top: 1px solid var(--rule);
+        max-width: 70ch;
+      }
+
+      .live {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--ink);
+        opacity: 0.25;
+      }
+      .dot.on {
+        opacity: 1;
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.25;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .dot.on {
+          animation: none;
+        }
+        * {
+          transition: none !important;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .colhead {
+          display: none;
+        }
+        .row {
+          grid-template-columns: 1fr auto;
+          row-gap: 3px;
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+        .row .time {
+          grid-column: 1;
+        }
+        .row .value {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .row .party {
+          grid-column: 1 / -1;
+          font-size: 13.5px;
+          color: var(--ink-soft);
+        }
+        .row .verdict {
+          grid-column: 1 / -1;
+        }
+        header,
+        .summary,
+        .detail,
+        footer {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+        .detail dl {
+          grid-template-columns: 1fr;
+        }
+        .detail dt {
+          margin-top: 6px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <header>
+        <h1 class="title">Allowance</h1>
+        <p class="subtitle">
+          Every payment this agent was allowed and refused to make, read live
+          from a public Hedera topic. Nothing here is reported by the agent
+          itself.
+        </p>
+
+        <div class="source">
+          <label for="topic">Topic</label>
+          <input
+            id="topic"
+            type="text"
+            value="0.0.10276150"
+            spellcheck="false"
+            inputmode="numeric"
+            aria-label="Hedera topic id"
+          />
+          <button id="load">Read topic</button>
+          <span class="live"
+            ><span class="dot" id="dot"></span>
+            <span id="status">idle</span></span
+          >
+        </div>
+        <p class="origin">
+          Reading <a id="src" href="#" rel="noreferrer">—</a>
+        </p>
+      </header>
+
+      <section class="summary" id="summary" hidden>
+        <div class="figure">
+          <span class="amount" id="spent">0.0000</span>
+          <span class="of"
+            >of <span id="limit">—</span> HBAR authorised in the current
+            window</span
+          >
+        </div>
+        <div class="meter" id="meter"><span></span></div>
+        <div class="counts">
+          <div class="count"><b id="n-total">0</b><span>decisions</span></div>
+          <div class="count"><b id="n-ok">0</b><span>cleared</span></div>
+          <div class="count declined">
+            <b id="n-no">0</b><span>declined</span>
+          </div>
+        </div>
+        <p class="scope" id="scope"></p>
+      </section>
+
+      <div class="colhead" id="colhead" hidden>
+        <div>Time</div>
+        <div>Paid to</div>
+        <div class="value">Amount</div>
+        <div>Decision</div>
+      </div>
+
+      <main id="ledger"></main>
+
+      <div class="notice" id="notice">
+        <h2>No statement loaded yet</h2>
+        <p>
+          Enter a topic id and select Read topic. The default is the topic used
+          in the demo; any Allowance topic will render.
+        </p>
+      </div>
+
+      <footer>
+        Receipts are written to Hedera Consensus Service by the spending guard
+        and read here through a public mirror node. This page cannot write to
+        the topic, and neither can anyone else alter what is already on it.
+      </footer>
+    </div>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const MIRROR = "https://testnet.mirrornode.hedera.com";
+        const POLL_MS = 4000;
+        const TINYBAR = 100000000;
+
+        const $ = (id) => document.getElementById(id);
+        const el = {
+          topic: $("topic"),
+          load: $("load"),
+          status: $("status"),
+          dot: $("dot"),
+          src: $("src"),
+          summary: $("summary"),
+          colhead: $("colhead"),
+          ledger: $("ledger"),
+          notice: $("notice"),
+          spent: $("spent"),
+          limit: $("limit"),
+          meter: $("meter"),
+          nTotal: $("n-total"),
+          nOk: $("n-ok"),
+          nNo: $("n-no"),
+          scope: $("scope"),
+        };
+
+        let timer = null;
+        let openRow = null;
+        let lastSignature = "";
+
+        const hbar = (t) => (Number(t) / TINYBAR).toFixed(4);
+
+        const clock = (consensus) => {
+          const secs = Number(String(consensus).split(".")[0]);
+          if (!Number.isFinite(secs)) return "—";
+          return new Date(secs * 1000).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+        };
+
+        // Reason codes are written for machines. These are for people.
+        const PLAIN = {
+          OK: "Cleared",
+          BAD_SIGNATURE: "Envelope not signed by the owner",
+          ENVELOPE_NOT_YET_VALID: "Envelope not active yet",
+          ENVELOPE_EXPIRED: "Envelope expired",
+          WRONG_AGENT: "Issued to a different agent",
+          WRONG_CURRENCY: "Wrong currency",
+          INVALID_AMOUNT: "Invalid amount",
+          OVER_PER_CALL: "Over the per-payment limit",
+          WINDOW_EXHAUSTED: "Budget for this window is spent",
+          NOT_ALLOWLISTED: "Recipient not approved",
+          NO_HISTORY: "Recipient has too little history",
+          LOW_REPUTATION: "Recipient's reputation is too low",
+          REPUTATION_UNAVAILABLE: "Reputation data unavailable",
+          UNREADABLE_REQUIREMENTS: "Payment terms could not be read",
+          GUARD_ERROR: "The guard could not complete a check",
+        };
+
+        function decode(b64) {
+          try {
+            const json = decodeURIComponent(escape(window.atob(b64)));
+            const r = JSON.parse(json);
+            // Anyone can write to a public topic. Only render well-formed receipts.
+            if (r.v !== 1 || (r.d !== "ALLOW" && r.d !== "DENY")) return null;
+            if (typeof r.amt !== "string" || typeof r.cp !== "string")
+              return null;
+            return r;
+          } catch {
+            return null;
+          }
+        }
+
+        async function fetchReceipts(topic) {
+          const out = [];
+          let path = `/api/v1/topics/${topic}/messages?order=asc&limit=100`;
+          while (path) {
+            const res = await fetch(MIRROR + path);
+            if (res.status === 404) return out; // topic exists, nothing written
+            if (!res.ok) throw new Error(`mirror node ${res.status}`);
+            const body = await res.json();
+            for (const m of body.messages || []) {
+              const r = m.message && decode(m.message);
+              if (r) {
+                r._at = m.consensus_timestamp;
+                out.push(r);
+              }
+            }
+            path = (body.links && body.links.next) || "";
+          }
+          return out;
+        }
+
+        function render(receipts) {
+          // Fingerprint the data so an unchanged poll doesn't collapse an open row.
+          const signature = receipts.map((r) => r._at).join("|");
+          if (signature === lastSignature) return;
+          lastSignature = signature;
+
+          if (!receipts.length) {
+            el.summary.hidden = el.colhead.hidden = true;
+            el.ledger.innerHTML = "";
+            el.notice.hidden = false;
+            el.notice.className = "notice";
+            el.notice.innerHTML =
+              "<h2>This topic has no receipts yet</h2>" +
+              "<p>The topic exists but nothing has been written to it. " +
+              "Run the agent and rows will appear here as decisions are made.</p>";
+            return;
+          }
+
+          el.notice.hidden = true;
+          el.summary.hidden = el.colhead.hidden = false;
+
+          // The meter tracks the most recent envelope, since limits belong to it.
+          const current = receipts[receipts.length - 1].eid;
+          const mine = receipts.filter((r) => r.eid === current);
+          const spent = mine.reduce(
+            (t, r) => (r.d === "ALLOW" ? t + Number(r.amt) : t),
+            0,
+          );
+          const cap = mine.reduce((c, r) => {
+            const w = r.ev && r.ev.perWindow;
+            return w ? Math.max(c, Number(w)) : c;
+          }, 0);
+
+          el.spent.textContent = hbar(spent);
+          el.limit.textContent = cap ? hbar(cap) : "—";
+          const pct = cap ? Math.min(100, (spent / cap) * 100) : 0;
+          el.meter.querySelector("span").style.width = pct + "%";
+          el.meter.classList.toggle("full", pct >= 100);
+
+          // Counts describe the CURRENT envelope, so they agree with the meter above.
+          // A topic accumulates every envelope ever used, and mixing the two scopes
+          // in one summary is how a statement stops being trustworthy.
+          el.nTotal.textContent = mine.length;
+          el.nOk.textContent = mine.filter((r) => r.d === "ALLOW").length;
+          el.nNo.textContent = mine.filter((r) => r.d === "DENY").length;
+
+          const envelopeCount = new Set(receipts.map((r) => r.eid)).size;
+          el.scope.textContent =
+            envelopeCount > 1
+              ? `This topic also holds ${receipts.length - mine.length} earlier decisions across ` +
+                `${envelopeCount - 1} previous envelope${envelopeCount > 2 ? "s" : ""}.`
+              : "";
+
+          // Newest first: a statement is read from the most recent entry back.
+          const rows = [...receipts].reverse();
+          el.ledger.innerHTML = "";
+
+          let shownEnvelope = null;
+
+          rows.forEach((r) => {
+            if (r.eid !== shownEnvelope) {
+              shownEnvelope = r.eid;
+              const group = receipts.filter((x) => x.eid === r.eid);
+              const cleared = group.filter((x) => x.d === "ALLOW");
+              const total = cleared.reduce((t, x) => t + Number(x.amt), 0);
+              const cap = group.reduce((c, x) => {
+                const w = x.ev && x.ev.perWindow;
+                return w ? Math.max(c, Number(w)) : c;
+              }, 0);
+
+              const div = document.createElement("div");
+              div.className =
+                "envelope" + (r.eid === current ? " current" : "");
+              div.innerHTML =
+                `<span class="who">Envelope ${esc(short(r.eid))}</span>` +
+                `<span class="what">${cleared.length} of ${group.length} cleared, ` +
+                `${hbar(total)}${cap ? " of " + hbar(cap) : ""} HBAR spent</span>`;
+              el.ledger.appendChild(div);
+            }
+            const declined = r.d === "DENY";
+            const key = r._at;
+
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "row" + (declined ? " declined" : "");
+            row.setAttribute("aria-expanded", String(openRow === key));
+            row.innerHTML =
+              `<div class="time">${clock(r._at)}</div>` +
+              `<div class="party">${esc(r.cp)}</div>` +
+              `<div class="value">${hbar(r.amt)}</div>` +
+              `<div><span class="verdict">${declined ? "Declined" : "Cleared"}</span>` +
+              (declined
+                ? `<div class="reason">${esc(PLAIN[r.r] || r.r)}</div>`
+                : "") +
+              `</div>`;
+
+            row.addEventListener("click", () => {
+              openRow = openRow === key ? null : key;
+              lastSignature = ""; // force a redraw
+              render(receipts);
+            });
+            el.ledger.appendChild(row);
+
+            if (openRow === key) {
+              const d = document.createElement("div");
+              d.className = "detail" + (declined ? " declined" : "");
+              const ev = r.ev || {};
+              const bits = [
+                ["Reason code", r.r],
+                ["Envelope", short(r.eid)],
+                ["Envelope hash", short(r.eh)],
+                ["Agent", r.ag],
+                ["Currency", r.cur],
+              ];
+              if (ev.reputationScore != null)
+                bits.push([
+                  "Reputation",
+                  `${ev.reputationScore} / 1000 over ${ev.feedbackCount} clients`,
+                ]);
+              if (ev.reputationSource)
+                bits.push(["Reputation source", ev.reputationSource]);
+              if (ev.allowlisted != null)
+                bits.push(["On the allowlist", ev.allowlisted ? "yes" : "no"]);
+              if (ev.perCall)
+                bits.push(["Per-payment limit", hbar(ev.perCall) + " HBAR"]);
+              if (ev.perWindow)
+                bits.push(["Window limit", hbar(ev.perWindow) + " HBAR"]);
+              if (ev.spentInWindow)
+                bits.push([
+                  "Spent before this",
+                  hbar(ev.spentInWindow) + " HBAR",
+                ]);
+              if (ev.wouldTotal)
+                bits.push([
+                  "Would have totalled",
+                  hbar(ev.wouldTotal) + " HBAR",
+                ]);
+              if (r.pay) bits.push(["Settlement", short(r.pay)]);
+
+              d.innerHTML =
+                "<dl>" +
+                bits
+                  .map(
+                    ([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`,
+                  )
+                  .join("") +
+                "</dl>";
+              el.ledger.appendChild(d);
+            }
+          });
+        }
+
+        const esc = (s) =>
+          String(s).replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              })[c],
+          );
+        const short = (s) =>
+          String(s).length > 22
+            ? String(s).slice(0, 12) + "…" + String(s).slice(-6)
+            : String(s);
+
+        function fail(message, hint) {
+          el.summary.hidden = el.colhead.hidden = true;
+          el.ledger.innerHTML = "";
+          el.notice.hidden = false;
+          el.notice.className = "notice bad";
+          el.notice.innerHTML = `<h2>${esc(message)}</h2><p>${esc(hint)}</p>`;
+        }
+
+        async function tick(topic) {
+          try {
+            el.status.textContent = "reading";
+            const receipts = await fetchReceipts(topic);
+            render(receipts);
+            el.status.textContent = "live";
+            el.dot.classList.add("on");
+          } catch (e) {
+            el.dot.classList.remove("on");
+            el.status.textContent = "stopped";
+            fail(
+              "Could not read that topic",
+              (e && e.message ? e.message + ". " : "") +
+                "Check the topic id is a Hedera testnet topic, in the form 0.0.12345.",
+            );
+            if (timer) {
+              clearInterval(timer);
+              timer = null;
+            }
+          }
+        }
+
+        function start() {
+          const topic = el.topic.value.trim();
+          if (!/^\d+\.\d+\.\d+$/.test(topic)) {
+            fail("That is not a topic id", "Topic ids look like 0.0.12345.");
+            return;
+          }
+          if (timer) clearInterval(timer);
+          openRow = null;
+          lastSignature = "";
+
+          const url = `${MIRROR}/api/v1/topics/${topic}/messages`;
+          el.src.textContent = url;
+          el.src.href = url;
+
+          tick(topic);
+          timer = setInterval(() => tick(topic), POLL_MS);
+        }
+
+        el.load.addEventListener("click", start);
+        el.topic.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") start();
+        });
+
+        // ?topic=0.0.x makes a specific statement linkable — useful in a submission.
+        const fromUrl = new URLSearchParams(location.search).get("topic");
+        if (fromUrl) el.topic.value = fromUrl;
+        start();
+      })();
+    </script>
+  </body>
+</html>

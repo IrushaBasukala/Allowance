@@ -4,8 +4,7 @@
 
 Live on Hedera testnet. Real x402 payments, real ERC-8004 reputation, every decision on the public ledger.
 
-**Demo video:** _(add link before submission)_
-**Repository:** _(add link before submission)_
+**Demo video:** _(coming soon....)_
 **Every command, with rationale:** [RUNBOOK.md](./RUNBOOK.md)
 
 ---
